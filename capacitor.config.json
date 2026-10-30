@@ -1,0 +1,17 @@
+{
+  "appId": "study.learnlang.app",
+  "appName": "Learnlang",
+  "webDir": "www",
+  "server": {
+    "hostname": "app.learnlang.study",
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "SplashScreen": {
+      "androidScaleType": "CENTER_CROP"
+    }
+  }
+}

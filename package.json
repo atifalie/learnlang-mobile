@@ -1,0 +1,22 @@
+{
+  "name": "learnlang-mobile",
+  "version": "1.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync": "cap sync android",
+    "test": "node --test tests/*.test.mjs",
+    "prepare:web": "node scripts/prepare-web.mjs",
+    "release:source": "node scripts/release-source.mjs"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.5.3",
+    "@capacitor/core": "8.5.3",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/splash-screen": "8.0.2",
+    "@capgo/capacitor-social-login": "8.7.5"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.3"
+  }
+}

@@ -1,0 +1,132 @@
+name: Build and publish signed APK
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['README.md', 'docs/**']
+  workflow_dispatch:
+    inputs:
+      frontend_sha:
+        description: 'Optional full frontend commit SHA; defaults to frontend.json'
+        required: false
+        type: string
+permissions:
+  contents: write
+concurrency:
+  group: mobile-release
+  cancel-in-progress: false
+jobs:
+  release:
+    if: vars.SIGNED_RELEASES_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - name: Select immutable frontend revision and APK version
+        id: source
+        env:
+          INPUT_FRONTEND_SHA: ${{ inputs.frontend_sha }}
+        run: |
+          python3 - <<'PY'
+          import json,os,re
+          source=json.load(open('frontend.json'))
+          sha=os.environ.get('INPUT_FRONTEND_SHA') or source['commit']
+          if not re.fullmatch('[a-f0-9]{40}',sha):raise SystemExit('A full frontend commit SHA is required')
+          if source['repository']!='atifalie/learnlang-frontend':raise SystemExit('Unexpected frontend repository')
+          run=int(os.environ['GITHUB_RUN_NUMBER'])
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('sha='+sha+'\n')
+          with open(os.environ['GITHUB_ENV'],'a') as f:
+              f.write('FRONTEND_SHA='+sha+'\nMOBILE_VERSION_CODE='+str(run+1)+'\nMOBILE_VERSION_NAME=1.0.'+str(run)+'\n')
+          PY
+      - name: Checkout selected frontend using read-only access
+        uses: actions/checkout@v4
+        with:
+          repository: atifalie/learnlang-frontend
+          ref: ${{ steps.source.outputs.sha }}
+          path: .frontend
+          ssh-key: ${{ secrets.FRONTEND_DEPLOY_KEY }}
+          persist-credentials: false
+      - name: Install locked dependencies and validate native API routing
+        run: |
+          npm ci --ignore-scripts
+          npm test
+          npm install --global pnpm@12.11.2
+      - name: Build bundled production frontend
+        working-directory: .frontend
+        env:
+          VITE_GRAPHQL_URL: /graphql
+          VITE_REVERB_APP_KEY: learnlang-production
+          VITE_REVERB_SCHEME: https
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm test
+          pnpm build
+      - name: Prepare native assets and Android SDK
+        run: |
+          node scripts/prepare-web.mjs
+          npx --no-install cap sync android
+          sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Build with existing app signing identity
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          python3 - <<'PY'
+          import base64,os,pathlib
+          for name in ['KEYSTORE_BASE64','ANDROID_STORE_PASSWORD','ANDROID_KEY_PASSWORD','ANDROID_KEY_ALIAS']:
+              if not os.environ.get(name):raise SystemExit('Missing required signing secret: '+name)
+          path=pathlib.Path(os.environ['RUNNER_TEMP'])/'learnlang-release.jks'
+          path.write_bytes(base64.b64decode(os.environ['KEYSTORE_BASE64'],validate=True))
+          path.chmod(0o600)
+          PY
+          export ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/learnlang-release.jks"
+          cd android
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleRelease
+      - name: Verify signature and package release files
+        run: |
+          mkdir -p artifacts
+          cp android/app/build/outputs/apk/release/app-release.apk "artifacts/learnlang-v${MOBILE_VERSION_NAME}.apk"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "artifacts/learnlang-v${MOBILE_VERSION_NAME}.apk" > "$RUNNER_TEMP/apk-certificate.txt"
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib,re
+          pinned=json.load(open('signing.json'))
+          text=pathlib.Path(os.environ['RUNNER_TEMP']+'/apk-certificate.txt').read_text()
+          match=re.search(r'Signer #1 certificate SHA-256 digest: ([a-fA-F0-9]+)',text)
+          if not match or match[1].lower()!=pinned['certificate_sha256']:raise SystemExit('APK signing identity mismatch')
+          version=os.environ['MOBILE_VERSION_NAME']
+          apk=pathlib.Path('artifacts')/('learnlang-v'+version+'.apk')
+          checksum=hashlib.sha256(apk.read_bytes()).hexdigest()
+          apk.with_suffix('.apk.sha256').write_text(checksum+'  '+apk.name+'\n')
+          metadata={'version':version,'version_code':int(os.environ['MOBILE_VERSION_CODE']),'application_id':pinned['application_id'],'frontend_commit':os.environ['FRONTEND_SHA'],'mobile_commit':os.environ['GITHUB_SHA'],'apk_sha256':checksum,'signing_certificate_sha256':match[1].lower()}
+          pathlib.Path('artifacts/build.json').write_text(json.dumps(metadata,indent=2)+'\n')
+          pathlib.Path('artifacts/notes.md').write_text('Signed Learnlang Android update.\n\nFrontend: `'+metadata['frontend_commit']+'`\n\nApplication: `'+pinned['application_id']+'`\n\nDownload the APK below. APK signature matches the previous installed version; uninstalling is not required.\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: learnlang-apk-${{ env.MOBILE_VERSION_NAME }}
+          path: artifacts/
+          retention-days: 30
+      - name: Publish versioned APK release in this repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v${MOBILE_VERSION_NAME}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" artifacts/*.apk artifacts/*.sha256 artifacts/build.json --clobber
+          else
+            gh release create "$tag" artifacts/*.apk artifacts/*.sha256 artifacts/build.json --title "Learnlang Android $tag" --notes-file artifacts/notes.md --target "$GITHUB_SHA"
+          fi
+      - name: Remove temporary signing file
+        if: always()
+        run: rm -f "$RUNNER_TEMP/learnlang-release.jks"
