@@ -2,7 +2,7 @@
 // API traffic must reach the API host rather than Capacitor's local asset server.
 (() => {
   const apiOrigin = 'https://api.learnlang.study'
-  const apiPath = /^\/(graphql|sanctum|broadcasting\/auth|profile-avatar|profile-cover|stories|device-context|vibes|storage)(\/|$)/
+  const apiPath = /^\/(graphql|sanctum|broadcasting\/auth|profile-avatar|profile-cover|stories|device-context|push|vibes|storage)(\/|$)/
   function endpoint(input) {
     const url = new URL(input, window.location.origin)
     return url.origin === window.location.origin && apiPath.test(url.pathname)

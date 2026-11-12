@@ -1,13 +1,16 @@
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
+import { firebaseConfigured } from './firebase-config.mjs'
 const root = fileURLToPath(new URL('..', import.meta.url))
 const source = resolve(process.argv[2] || root + '/.frontend/dist/spa')
 const html = await readFile(source + '/index.html', 'utf8')
 if (!html.includes('/assets/')) throw new Error('Expected a production frontend build')
+const pushConfigured = await firebaseConfigured(root + '/android/app/google-services.json', process.env.MOBILE_PUSH_REQUIRED === '1')
 await rm(root + '/www', { recursive: true, force: true })
 await mkdir(root + '/www', { recursive: true })
 await cp(source, root + '/www', { recursive: true })
 await cp(root + '/scripts/native-api.js', root + '/www/native-api.js')
-await writeFile(root + '/www/index.html', html.replace('<head>', '<head><script src="/native-api.js"></script>'))
+await writeFile(root + '/www/native-config.js', `window.LEARNLANG_NATIVE_PUSH_CONFIGURED = ${pushConfigured};\n`)
+await writeFile(root + '/www/index.html', html.replace('<head>', '<head><script src="/native-config.js"></script><script src="/native-api.js"></script>'))
 console.log('Prepared bundled frontend assets and native API routing')

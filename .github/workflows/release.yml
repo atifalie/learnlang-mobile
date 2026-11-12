@@ -73,7 +73,22 @@ jobs:
           pnpm test
           pnpm build
       - name: Prepare native assets and Android SDK
+        env:
+          GOOGLE_SERVICES_BASE64: ${{ secrets.ANDROID_GOOGLE_SERVICES_BASE64 }}
+          MOBILE_PUSH_REQUIRED: '1'
         run: |
+          python3 - <<'PY'
+          import base64,json,os,pathlib
+          encoded=os.environ.get('GOOGLE_SERVICES_BASE64','')
+          if not encoded:raise SystemExit('Missing ANDROID_GOOGLE_SERVICES_BASE64 for Android push')
+          raw=base64.b64decode(encoded,validate=True)
+          config=json.loads(raw)
+          if not any(c.get('client_info',{}).get('android_client_info',{}).get('package_name')=='study.learnlang.app' for c in config.get('client',[])):
+              raise SystemExit('Firebase configuration must target study.learnlang.app')
+          path=pathlib.Path('android/app/google-services.json')
+          path.write_bytes(raw)
+          path.chmod(0o600)
+          PY
           node scripts/prepare-web.mjs
           npx --no-install cap sync android
           sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
@@ -132,4 +147,4 @@ jobs:
           fi
       - name: Remove temporary signing file
         if: always()
-        run: rm -f "$RUNNER_TEMP/learnlang-release.jks"
+        run: rm -f "$RUNNER_TEMP/learnlang-release.jks" android/app/google-services.json

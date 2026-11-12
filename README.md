@@ -24,6 +24,20 @@ Set the repository variable `SIGNED_RELEASES_ENABLED=true` only after the signin
 
 `signing.json` pins the existing app's public certificate fingerprint. The workflow refuses to publish an APK signed by another key. Versions start above the existing APK's version code 1.
 
+## Android notifications
+
+The shell includes Capacitor Push Notifications and native message/call/activity
+channels. Members opt in from Settings; token registration, delivery and logout
+are managed by Laravel. Firebase configuration is required before real delivery.
+See [Android push setup](https://github.com/atifalie/learnlang-api/blob/main/deploy/production/ANDROID_PUSH.md)
+in the API repository, or `learnlang-api/deploy/production/ANDROID_PUSH.md` locally.
+
+Place the Android client `google-services.json` in `android/app/` locally, or supply
+its base64 as the Actions secret `ANDROID_GOOGLE_SERVICES_BASE64`. Never put a
+Firebase **service-account private key** in this repository or APK. The release
+workflow requires valid client configuration for `study.learnlang.app`; local
+unconfigured debug builds remain available for compilation checks.
+
 ## Local checks
 
 ```sh

@@ -13,3 +13,4 @@ android/app/src/main/assets/
 android/capacitor-cordova-android-plugins/
 android/capacitor.settings.gradle
 android/app/capacitor.build.gradle
+android/app/google-services.json

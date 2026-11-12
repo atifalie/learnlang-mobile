@@ -25,6 +25,12 @@ test('CDN and bundled assets retain their original destination', () => {
   assert.equal(calls[0][0], '/assets/app.js')
   assert.equal(calls[1][0], 'https://cdn.learnlang.study/photo.jpg')
 })
+test('native push registration uses the authenticated Laravel API', () => {
+  const { window, calls } = fixture()
+  window.fetch('/push/device', { method: 'POST', body: '{"token":"synthetic"}' })
+  assert.equal(calls[0][0], 'https://api.learnlang.study/push/device')
+  assert.equal(calls[0][1].credentials, 'include')
+})
 test('GraphQL and private-channel auth XHR use the live API', () => {
   const { calls, XHR } = fixture()
   const auth = new XHR()
