@@ -38,6 +38,18 @@ Firebase **service-account private key** in this repository or APK. The release
 workflow requires valid client configuration for `study.learnlang.app`; local
 unconfigured debug builds remain available for compilation checks.
 
+## Google sign-in
+
+The APK uses the native SocialLogin plugin rather than a browser popup. Its bundled
+frontend must be built with `VITE_GOOGLE_CLIENT_ID` set to the production **web**
+OAuth client (configured in the release workflow). Google Cloud must also contain
+an **Android** OAuth client for `study.learnlang.app` and the release certificate
+SHA-1 `28:27:CA:CF:55:BC:33:63:7D:3A:F2:DB:02:D5:3F:51:58:1C:69:C6`.
+This fingerprint was extracted from the existing APK and checked against the
+SHA-256 identity pinned in `signing.json`. Re-register the fingerprint if the app's
+signing identity changes. Only basic profile/email authorization is requested;
+Laravel exchanges the Google access token for its normal session cookie.
+
 ## Local checks
 
 ```sh

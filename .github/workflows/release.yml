@@ -66,6 +66,7 @@ jobs:
         working-directory: .frontend
         env:
           VITE_GRAPHQL_URL: /graphql
+          VITE_GOOGLE_CLIENT_ID: 420562145401-aprask1nc52d9fao1b10bh2uvvpa6it0.apps.googleusercontent.com
           VITE_REVERB_APP_KEY: learnlang-production
           VITE_REVERB_SCHEME: https
         run: |
