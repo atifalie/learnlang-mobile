@@ -149,3 +149,5 @@ jobs:
       - name: Remove temporary signing file
         if: always()
         run: rm -f "$RUNNER_TEMP/learnlang-release.jks" android/app/google-services.json
+
+# Re-run after a transient Gradle failure; no behaviour change.
